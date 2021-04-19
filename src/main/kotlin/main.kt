@@ -3,19 +3,31 @@ import java.io.File
 fun main(args: Array<String>) {
     File("/home/lereena/IdeaProjects/yacc-to-tree-sitter/src/output.txt").writeText("")
     File("/home/lereena/IdeaProjects/yacc-to-tree-sitter/src/optionals.txt").writeText("")
-    convert("/home/lereena/github/tree-sitter-pascalabcnet/full1904.txt",
-        "/home/lereena/IdeaProjects/yacc-to-tree-sitter/src/output.txt")
+    convert(
+        "/home/lereena/github/tree-sitter-pascalabcnet/full1904.txt",
+        "/home/lereena/IdeaProjects/yacc-to-tree-sitter/src/output.txt"
+    )
 }
+
+val optionals = mutableListOf<String>()
 
 fun convert(inputFile: String, outputFile: String) {
     var content = File(inputFile).readText()
+    var output = StringBuilder()
 
     val rulesSectionStart = content.indexOf("%%")
     val rulesSectionEnd = content.lastIndexOf("%%")
     content = content.substring(rulesSectionStart + 2, rulesSectionEnd)
 
+    output.append("module.exports = grammar({\n" +
+            "    name: 'pascalabcnet',\n" +
+            "\n" +
+            "    rules: {")
+
     val rules = content.split(';')
     for (rule in rules) {
+        if (rule.trim().isEmpty())
+            continue
         val splitRule = removeSemanticActions(rule.trim()).split(':')
         val ruleName = splitRule[0].trim()
         val ruleBranches = splitRule[1].split('|')
@@ -27,18 +39,32 @@ fun convert(inputFile: String, outputFile: String) {
         else
             formManyBranchRule(ruleName, ruleBranches)
 
-        println(formedRule)
-        File(outputFile).appendText(formedRule)
+//        println(formedRule)
+        output.append(formedRule)
     }
+
+    output.append("}\n});")
+
+    val result = postProcess(output.toString())
+
+    File(outputFile).writeText(result)
+}
+
+fun postProcess(output: String): String {
+    var newOutput = output
+    for (optionalRule in optionals) {
+        newOutput = newOutput.replace("$.$optionalRule,", "optional($.$optionalRule),")
+    }
+    return newOutput
 }
 
 fun formOneBranchRule(ruleName: String, ruleBranches: List<String>): String {
     val builder = StringBuilder()
-    builder.append(makeHeader(ruleName) + "$.")
+    builder.append(makeHeader(ruleName))
 
     val branch = ruleBranches[0].trim().split(' ')
     if (branch.size == 1)
-        builder.append(branch[0] + ',')
+        builder.append("$." + branch[0] + ',')
     else {
         builder.append(processBranch(branch))
     }
@@ -64,16 +90,22 @@ fun makeHeader(name: String): String {
 fun formManyBranchRule(ruleName: String, ruleBranches: List<String>): String {
     val builder = StringBuilder()
     builder.append(makeHeader(ruleName))
-    builder.append("choice(\n")
+
+    val actuallyMoreThanOneBranch = ruleBranches.count { x -> x.trim().isNotEmpty() } > 1
+    if (actuallyMoreThanOneBranch)
+        builder.append("choice(\n")
 
     for (branch in ruleBranches) {
-        if (branch.trim().isEmpty())
+        if (branch.trim().isEmpty()) {
+            optionals.add(ruleName)
             File("/home/lereena/IdeaProjects/yacc-to-tree-sitter/src/optionals.txt").appendText("$ruleName\n")
-        else
+        } else
             builder.append(processBranch(branch.trim().split(' ')))
     }
 
-    builder.append("),\n")
+    if (actuallyMoreThanOneBranch)
+        builder.append("),\n")
+
     return builder.toString()
 }
 
