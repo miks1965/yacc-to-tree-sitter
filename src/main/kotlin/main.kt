@@ -30,6 +30,14 @@ fun convert(inputFile: String, outputFile: String) {
             continue
         val splitRule = removeSemanticActions(rule.trim()).split(':')
         val ruleName = splitRule[0].trim()
+
+        if (ruleName == "template_empty_param_list") {
+            output.append("template_empty_param_list: \$ => /,+/,\n")
+            continue
+        }
+        if (ruleName == "template_empty_param")
+            continue
+
         val ruleBranches = splitRule[1].split('|')
 
         if (ruleBranches.isEmpty())
@@ -55,6 +63,9 @@ fun postProcess(output: String): String {
     for (optionalRule in optionals) {
         newOutput = newOutput.replace("$.$optionalRule,", "optional($.$optionalRule),")
     }
+
+    newOutput = newOutput.replace("$.template_empty_param_list,", "optional(\$.template_empty_param_list),")
+
     return newOutput
 }
 
